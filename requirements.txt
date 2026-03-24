@@ -15,6 +15,7 @@ cerebras-cloud-sdk
 fpdf2
 kaleido
 python-dotenv
+redis
 pdfplumber
 python-docx
 scikit-learn
