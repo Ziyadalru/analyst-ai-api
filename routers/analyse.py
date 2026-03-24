@@ -284,4 +284,11 @@ async def run_analysis_stream(req: AnalyseRequest, user: dict | None = Depends(c
 
         yield f"data: {json.dumps({'type': 'done', 'full_context': full_context}, cls=NumpyEncoder)}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
