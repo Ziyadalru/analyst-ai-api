@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
     libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libpango-1.0-0 libcairo2 \
     libasound2 libx11-6 libx11-xcb1 libxcb1 \
-    libxext6 libxfont2 libxi6 libxtst6 \
+    libxext6 libxi6 libxtst6 \
+    libxss1 xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
