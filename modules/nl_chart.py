@@ -236,13 +236,52 @@ def execute_chart_spec(df: pd.DataFrame, spec: dict) -> go.Figure:
 
     return fig
 
+def _default_chart(df: pd.DataFrame):
+    """Generate a sensible default chart when the query is too vague."""
+    schema = build_df_schema(df)
+    # Find a numeric col and a categorical col automatically
+    num_cols = [c for c, v in schema.items() if v.get('type') == 'numeric']
+    cat_cols = [c for c, v in schema.items() if v.get('type') == 'categorical' and v.get('unique', 999) <= 50]
+    if not num_cols or not cat_cols:
+        return None, "No suitable columns for a default chart."
+    y_col = num_cols[0]
+    x_col = cat_cols[0]
+    # Prefer revenue/sales/profit columns
+    for keyword in ('profit', 'revenue', 'sales', 'amount', 'price', 'benefit'):
+        match = next((c for c in num_cols if keyword in c.lower()), None)
+        if match:
+            y_col = match
+            break
+    # Prefer category/product/region columns
+    for keyword in ('category', 'product', 'region', 'segment', 'type', 'department'):
+        match = next((c for c in cat_cols if keyword in c.lower()), None)
+        if match:
+            x_col = match
+            break
+    spec = {
+        'chart_type': 'bar', 'x': x_col, 'y': y_col,
+        'group_by': x_col, 'aggregation': 'sum',
+        'top_n': 10, 'sort': 'desc',
+        'title': f'Top 10 {x_col} by {y_col}',
+        'x_label': x_col, 'y_label': y_col,
+    }
+    return execute_chart_spec(df, spec), spec.get('title')
+
+
 def natural_language_chart(user_query: str, df: pd.DataFrame):
     schema = build_df_schema(df)
     spec = get_chart_spec(user_query, schema)
     if not spec:
+        # Fall back to auto-generated default chart
+        fig, title = _default_chart(df)
+        if fig:
+            return fig, f"Auto chart: {title}"
         return None, "Could not understand that request. Try: 'show revenue by category as a bar chart'"
     fig = execute_chart_spec(df, spec)
     if fig is None:
+        fig, title = _default_chart(df)
+        if fig:
+            return fig, f"Auto chart: {title}"
         return None, "Could not build that chart — columns may not contain enough data. Try rephrasing."
     explanation = f"{spec.get('title', 'Chart')} — {spec.get('chart_type', '').title()} chart"
     if spec.get('aggregation') and spec.get('aggregation') != 'none':

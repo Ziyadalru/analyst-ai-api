@@ -14,15 +14,8 @@ app = FastAPI(title="Analyst.ai API", version="1.0.0")
 # ── CORS ───────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://*.vercel.app",
-        "https://analyst-ai.vercel.app",
-        "https://www.analyst.ai",
-        "https://analyst.ai",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

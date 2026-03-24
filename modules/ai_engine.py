@@ -70,20 +70,24 @@ def _chat_system(full_context: str, data_context: str) -> str:
     parts = [
         "You are Analyst.ai — a senior business analyst with deep expertise in finance, "
         "supply chain, customer analytics, operations, and risk management.",
-        "Answer like a McKinsey consultant: specific, data-driven, direct.",
-        "Reference actual numbers. Give actionable recommendations, not just observations.",
-        "Keep answers to 4–6 sentences unless the user asks for detail.",
+        "Answer like a McKinsey consultant: specific, data-driven, direct. Use actual numbers from the data.",
+        "Give actionable recommendations, not just observations. Keep answers to 3–5 sentences.",
+        "Never start a response with 'No' or any negation. Never hedge with phrases like 'if it were' — use the real data.",
+        "You are embedded in a data analytics platform. Charts are rendered automatically — you never write code.",
+        "When charts are shown, give the key business insight in 2–3 plain sentences.",
+        "NEVER use markdown: no **bold**, no headers, no bullet points, no ``` code blocks. Plain prose only.",
+        "NEVER write Python, SQL, or any code.",
         "Industry benchmarks: OTIF >85%, profit margin varies by industry, late delivery <5% is excellent.",
     ]
     if data_context:
         parts.append(f"\nDataset:\n{data_context}")
     if full_context:
-        parts.append(f"\nAnalysis results:\n{full_context[:3000]}")
+        parts.append(f"\nAnalysis results:\n{full_context[:1500]}")
     return "\n".join(parts)
 
 
 # ── Cerebras ─────────────────────────────────────────────────────────────────
-def _cerebras_complete(messages: list, max_tokens: int = 500, temperature: float = 0.3) -> str:
+def _cerebras_complete(messages: list, max_tokens: int = 1200, temperature: float = 0.3) -> str:
     if not _cerebras:
         raise RuntimeError("Cerebras not configured")
     res = _cerebras.chat.completions.create(
@@ -103,7 +107,7 @@ def _groq_chat(messages: list, full_context: str, data_context: str) -> str:
             model=MODEL,
             messages=[{"role": "system", "content": system}] + messages,
             temperature=0.3,
-            max_tokens=500,
+            max_tokens=1200,
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -118,7 +122,7 @@ def _claude_chat(messages: list, full_context: str, data_context: str) -> str:
     try:
         res = _claude.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=800,
+            max_tokens=1200,
             system=system,
             messages=messages,
         )
@@ -132,13 +136,20 @@ def _gemini_chat_with_model(model: str, messages: list, full_context: str, data_
         raise RuntimeError("Gemini not configured")
     from google.genai import types as _gtypes
     system = _chat_system(full_context, data_context)
-    user_parts = [m['content'] for m in messages if m['role'] != 'system']
+    # Build proper multi-turn conversation (user/model alternating turns)
+    contents = []
+    for m in messages:
+        role = "user" if m["role"] == "user" else "model"
+        contents.append(_gtypes.Content(
+            role=role,
+            parts=[_gtypes.Part.from_text(text=m["content"])],
+        ))
     res = _gemini_client.models.generate_content(
         model=model,
-        contents="\n\n".join(user_parts),
+        contents=contents,
         config=_gtypes.GenerateContentConfig(
             system_instruction=system,
-            max_output_tokens=500,
+            max_output_tokens=1200,
             temperature=0.3,
         ),
     )
@@ -151,7 +162,7 @@ def _gemma_chat(messages: list, full_context: str, data_context: str) -> str:
         model=GEMMA_CHAT_MODEL,
         messages=[{"role": "system", "content": system}] + messages,
         temperature=0.3,
-        max_tokens=500,
+        max_tokens=1200,
     )
     return res.choices[0].message.content
 
@@ -160,20 +171,11 @@ def chat_response(messages: list, full_context: str, data_context: str = "", use
     if use_pro and _claude:
         return _claude_chat(messages, full_context, data_context)
 
-    # Try Gemini models in quality order
-    for model in GEMINI_CHAT_MODELS:
-        try:
-            result = _gemini_chat_with_model(model, messages, full_context, data_context)
-            print(f"[Chat] Using {model}")
-            return result
-        except Exception as e:
-            print(f"[Chat] {model} failed ({e}), trying next")
-
-    # Cerebras (faster than Groq, same quality)
+    # Cerebras — 235B model, fastest and most reliable
     try:
         system = _chat_system(full_context, data_context)
         result = _cerebras_complete([{"role": "system", "content": system}] + messages)
-        print("[Chat] Using Cerebras llama-3.3-70b")
+        print("[Chat] Using Cerebras qwen-3-235b")
         return result
     except Exception as e:
         print(f"[Chat] Cerebras failed ({e}), trying Groq")
@@ -184,7 +186,16 @@ def chat_response(messages: list, full_context: str, data_context: str = "", use
         print("[Chat] Using Groq 70B")
         return result
     except Exception as e:
-        print(f"[Chat] Groq 70B failed ({e}), trying Gemma")
+        print(f"[Chat] Groq 70B failed ({e}), trying Gemini")
+
+    # Gemini cascade as fallback
+    for model in GEMINI_CHAT_MODELS:
+        try:
+            result = _gemini_chat_with_model(model, messages, full_context, data_context)
+            print(f"[Chat] Using {model}")
+            return result
+        except Exception as e:
+            print(f"[Chat] {model} failed ({e}), trying next")
 
     # Gemma 27B
     try:
@@ -200,7 +211,7 @@ def chat_response(messages: list, full_context: str, data_context: str = "", use
             model=FAST_MODEL,
             messages=[{"role": "system", "content": _chat_system(full_context, data_context)}] + messages,
             temperature=0.3,
-            max_tokens=500,
+            max_tokens=1200,
         )
         return res.choices[0].message.content
     except Exception as e:
