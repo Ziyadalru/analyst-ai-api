@@ -153,8 +153,9 @@ def _parse_word(contents: bytes) -> pd.DataFrame:
     return pd.DataFrame({'text': paragraphs})
 
 
-def _parse_excel(contents: bytes, sheet_name: str | None) -> tuple[pd.DataFrame, list[str], str]:
-    xl = pd.ExcelFile(io.BytesIO(contents))
+def _parse_excel(contents: bytes, sheet_name: str | None, fname: str = "") -> tuple[pd.DataFrame, list[str], str]:
+    engine = "xlrd" if fname.endswith(".xls") else "openpyxl"
+    xl = pd.ExcelFile(io.BytesIO(contents), engine=engine)
     sheets   = xl.sheet_names
     selected = sheet_name if (sheet_name and sheet_name in sheets) else _best_sheet(xl)
     df       = _smart_parse_sheet(xl, selected)
@@ -183,7 +184,7 @@ async def upload_file(
         if is_csv:
             df = pd.read_csv(io.BytesIO(contents), encoding="unicode_escape")
         elif is_excel:
-            df, sheets, active_sheet = _parse_excel(contents, sheet_name)
+            df, sheets, active_sheet = _parse_excel(contents, sheet_name, fname)
         elif is_pdf:
             df = _parse_pdf(contents)
         elif is_word:
