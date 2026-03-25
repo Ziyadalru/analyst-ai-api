@@ -70,8 +70,15 @@ def _chart_to_png(fig_dict: dict) -> str | None:
         for i, trace in enumerate(traces[:6]):
             c = colors[i % len(colors)]
             t = trace.get('type', 'bar')
-            x = _decode_plotly_array(trace.get('x') or trace.get('labels') or [])
-            y = _decode_plotly_array(trace.get('y') or trace.get('values') or [])
+            orientation = trace.get('orientation', 'v')
+            x_raw = _decode_plotly_array(trace.get('x') or trace.get('labels') or [])
+            y_raw = _decode_plotly_array(trace.get('y') or trace.get('values') or [])
+            # Horizontal bar: x=numerics, y=categories — swap so our code always has
+            # x=categories and y=numerics for consistent handling
+            if orientation == 'h':
+                x, y = y_raw, x_raw
+            else:
+                x, y = x_raw, y_raw
             z = trace.get('z')
             name = trace.get('name', '')
 
