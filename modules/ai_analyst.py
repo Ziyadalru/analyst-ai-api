@@ -188,7 +188,7 @@ def plan_analysis(profile: dict, analysis_category: str, df_sample: str, num_sec
 
     section_rule = f"exactly {num_sections}" if num_sections > 4 else f"2-{num_sections}"
 
-    prompt = f"""You are a senior data analyst. Create a detailed analysis plan for this dataset.
+    prompt = f"""You are a senior business analyst and strategic advisor. Analyse this dataset and create a decision-focused report plan.
 
 Dataset: {profile['shape']['rows']:,} rows, {profile['shape']['cols']} columns
 Analysis category: {analysis_category}
@@ -206,12 +206,16 @@ Sample rows:
 
 Rules:
 1. Create {section_rule} sections with specific titles relevant to THIS dataset
-2. Each section: 3 findings with ACTUAL numbers, 2-3 charts, key metrics
-3. Choose chart types that best reveal the data's story — use variety
-4. ONLY use column names that EXACTLY match: {list(profile['column_profiles'].keys())}
-5. For bubble charts: size= field is required (another numeric column)
-6. For treemap/funnel/waterfall: x=categorical, y=numeric
-7. Key metrics should use actual computed values from column profiles
+2. Each section must have exactly 3 items — one TREND, one INSIGHT, one RECOMMENDATION:
+   - TREND: what is happening, with exact numbers (e.g. "Revenue grew 18% in Q3 vs Q2")
+   - INSIGHT: why it matters (e.g. "Top 3 products drive 71% of revenue — bottom 40% contribute under 8%")
+   - RECOMMENDATION: a clear business action (e.g. "Increase inventory for top 3 products by 20% ahead of Q4 to avoid stockouts")
+3. Recommendations must be specific and actionable — never vague. Say WHAT to do, by HOW MUCH, and WHY.
+4. Choose 2-3 charts that best reveal the story — use variety
+5. ONLY use column names that EXACTLY match: {list(profile['column_profiles'].keys())}
+6. For bubble charts: size= field is required (another numeric column)
+7. For treemap/funnel/waterfall: x=categorical, y=numeric
+8. Key metrics should use actual computed values from column profiles
 
 Return ONLY valid JSON:
 {{
@@ -219,9 +223,9 @@ Return ONLY valid JSON:
     {{
       "title": "Specific Section Title",
       "findings": [
-        "specific finding with exact number from data",
-        "another finding with number",
-        "third finding with number"
+        "TREND: specific trend with exact number",
+        "INSIGHT: why this matters with specific number",
+        "RECOMMENDATION: exact action to take with specific target"
       ],
       "charts": [
         {{"type": "bar", "x": "exact_col", "y": "exact_col", "title": "Chart Title", "agg": "sum", "color_by": null}},
@@ -230,7 +234,7 @@ Return ONLY valid JSON:
       "key_metrics": {{"Metric Name": "value with unit"}}
     }}
   ],
-  "executive_insight": "2-3 sentence summary of the most important finding with specific numbers"
+  "executive_insight": "2-3 sentence summary covering the most critical finding and the single most important action to take"
 }}"""
 
     try:
