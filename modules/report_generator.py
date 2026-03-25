@@ -26,6 +26,24 @@ def _safe(text: str) -> str:
     return text.encode('latin-1', 'replace').decode('latin-1')
 
 
+def _decode_plotly_array(arr):
+    """Decode Plotly typed array format {'dtype':..., 'bdata':...} to a plain list.
+    Plotly uses this binary encoding for numeric arrays instead of plain JSON lists.
+    """
+    if isinstance(arr, dict) and 'bdata' in arr:
+        import base64
+        import numpy as np
+        dtype_str = arr.get('dtype', 'float64')
+        try:
+            raw = base64.b64decode(arr['bdata'])
+            return np.frombuffer(raw, dtype=dtype_str).tolist()
+        except Exception:
+            return []
+    if isinstance(arr, list):
+        return arr
+    return []
+
+
 def _chart_to_png(fig_dict: dict) -> str | None:
     """Render a Plotly figure dict to PNG using matplotlib (no browser needed)."""
     try:
@@ -54,8 +72,8 @@ def _chart_to_png(fig_dict: dict) -> str | None:
         for i, trace in enumerate(traces[:6]):
             c = colors[i % len(colors)]
             t = trace.get('type', 'bar')
-            x = trace.get('x') or trace.get('labels') or []
-            y = trace.get('y') or trace.get('values') or []
+            x = _decode_plotly_array(trace.get('x') or trace.get('labels') or [])
+            y = _decode_plotly_array(trace.get('y') or trace.get('values') or [])
             z = trace.get('z')
             name = trace.get('name', '')
 
@@ -75,8 +93,8 @@ def _chart_to_png(fig_dict: dict) -> str | None:
                         continue
                     z_arr = np.array(z, dtype=float)
                     im = ax.imshow(z_arr, aspect='auto', cmap='RdYlGn', vmin=-1, vmax=1)
-                    x_labels = trace.get('x') or []
-                    y_labels = trace.get('y') or []
+                    x_labels = _decode_plotly_array(trace.get('x') or [])
+                    y_labels = _decode_plotly_array(trace.get('y') or [])
                     if x_labels:
                         ax.set_xticks(range(len(x_labels)))
                         ax.set_xticklabels([str(v)[:10] for v in x_labels], rotation=45, fontsize=6)
