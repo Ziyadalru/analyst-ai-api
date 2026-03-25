@@ -39,6 +39,7 @@ def _chart_to_png(fig_dict: dict) -> str | None:
         title = layout.get('title', '')
         if isinstance(title, dict):
             title = title.get('text', '')
+        print(f"[chart_to_png] title={title!r} traces={len(traces)} types={[t.get('type') for t in traces]}", flush=True)
 
         fig, ax = plt.subplots(figsize=(9, 3.5))
         fig.patch.set_facecolor('white')
@@ -59,6 +60,7 @@ def _chart_to_png(fig_dict: dict) -> str | None:
             name = trace.get('name', '')
 
             try:
+                print(f"[chart_to_png]   trace[{i}] type={t!r} x_len={len(x)} y_len={len(y)} z={z is not None}", flush=True)
                 # Histogram — only has x, compute bins with numpy
                 if t == 'histogram':
                     if not x:
@@ -118,10 +120,12 @@ def _chart_to_png(fig_dict: dict) -> str | None:
                     x_labels = [str(v)[:15] for v in x_clean] if x_clean else x_pos
                     ax.bar(x_labels, y_clean, color=c, alpha=0.85, label=name)
                 plotted = True
-            except Exception:
+            except Exception as _trace_err:
+                print(f"[chart_to_png]   trace[{i}] FAILED: {_trace_err}", flush=True)
                 continue
 
         if not plotted:
+            print(f"[chart_to_png] FAILED: no traces plotted for {title!r}", flush=True)
             plt.close(fig)
             return None
 
@@ -150,7 +154,8 @@ def _chart_to_png(fig_dict: dict) -> str | None:
         fig.savefig(tmp.name, dpi=150, bbox_inches='tight', facecolor='white')
         plt.close(fig)
         return tmp.name
-    except Exception:
+    except Exception as _outer_err:
+        print(f"[chart_to_png] OUTER exception: {_outer_err}", flush=True)
         return None
 
 
@@ -302,6 +307,11 @@ def generate_report(
 
     # ── Pre-render all charts in parallel ─────────────────────────────────────
     # Collect all (section_name, chart_key, fig_dict) tuples — max 2 per section
+    print(f"[generate_report] sections={list(sections.keys())}", flush=True)
+    for _sn, _sd in sections.items():
+        _charts = (_sd or {}).get('charts') or {}
+        print(f"[generate_report]   section={_sn!r} charts={list(_charts.keys())}", flush=True)
+
     render_tasks: list[tuple[str, str, dict]] = []
     for section_name, section in sections.items():
         if not section:
