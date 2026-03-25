@@ -27,24 +27,94 @@ def _safe(text: str) -> str:
 
 
 def _chart_to_png(fig_dict: dict) -> str | None:
-    """Render a Plotly figure dict to a temporary PNG with a light theme for print."""
+    """Render a Plotly figure dict to PNG using matplotlib (no browser needed)."""
     try:
-        import plotly.graph_objects as go
-        import plotly.io as pio
-        fig = go.Figure(fig_dict)
-        fig.update_layout(
-            paper_bgcolor='white',
-            plot_bgcolor='#f8fafc',
-            font=dict(color='#1e293b', size=11),
-            title_font=dict(color='#1e293b'),
-            xaxis=dict(gridcolor='#e2e8f0', zerolinecolor='#cbd5e1', color='#475569'),
-            yaxis=dict(gridcolor='#e2e8f0', zerolinecolor='#cbd5e1', color='#475569'),
-            legend=dict(bgcolor='white', bordercolor='#e2e8f0', font=dict(color='#475569')),
-            margin=dict(t=40, b=30, l=50, r=20),
-        )
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        traces = fig_dict.get('data', [])
+        layout = fig_dict.get('layout', {})
+        title = layout.get('title', '')
+        if isinstance(title, dict):
+            title = title.get('text', '')
+
+        fig, ax = plt.subplots(figsize=(9, 3.5))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('#f8fafc')
+        ax.grid(True, color='#e2e8f0', linewidth=0.5)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        colors = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4']
+        plotted = False
+
+        for i, trace in enumerate(traces[:6]):
+            c = colors[i % len(colors)]
+            t = trace.get('type', 'bar')
+            x = trace.get('x') or trace.get('labels') or []
+            y = trace.get('y') or trace.get('values') or []
+            name = trace.get('name', '')
+
+            if not y:
+                continue
+
+            x_pos = list(range(len(y))) if not x else None
+
+            try:
+                if t in ('bar',):
+                    if x:
+                        ax.bar([str(v)[:15] for v in x], [float(v) for v in y], color=c, alpha=0.85, label=name)
+                    else:
+                        ax.bar(x_pos, [float(v) for v in y], color=c, alpha=0.85, label=name)
+                elif t in ('scatter', 'line'):
+                    mode = trace.get('mode', 'lines')
+                    xs = [str(v) for v in x] if x else x_pos
+                    ys = [float(v) for v in y]
+                    if 'lines' in mode:
+                        ax.plot(xs, ys, color=c, linewidth=2, label=name)
+                    if 'markers' in mode:
+                        ax.scatter(xs, ys, color=c, s=30, label=name)
+                elif t == 'pie':
+                    vals = [float(v) for v in y]
+                    lbls = [str(v)[:12] for v in x] if x else [str(j) for j in range(len(vals))]
+                    ax.pie(vals, labels=lbls, colors=colors[:len(vals)], autopct='%1.0f%%')
+                else:
+                    ax.bar([str(v)[:15] for v in x] if x else x_pos,
+                           [float(v) for v in y], color=c, alpha=0.85, label=name)
+                plotted = True
+            except Exception:
+                continue
+
+        if not plotted:
+            plt.close(fig)
+            return None
+
+        if title:
+            ax.set_title(str(title)[:60], fontsize=10, color='#1e293b', pad=8)
+
+        xaxis = layout.get('xaxis', {})
+        yaxis = layout.get('yaxis', {})
+        if isinstance(xaxis, dict) and xaxis.get('title'):
+            xt = xaxis['title']
+            ax.set_xlabel(xt.get('text', xt) if isinstance(xt, dict) else str(xt), fontsize=8)
+        if isinstance(yaxis, dict) and yaxis.get('title'):
+            yt = yaxis['title']
+            ax.set_ylabel(yt.get('text', yt) if isinstance(yt, dict) else str(yt), fontsize=8)
+
+        ax.tick_params(axis='x', labelsize=7, rotation=20)
+        ax.tick_params(axis='y', labelsize=7)
+
+        handles, labels = ax.get_legend_handles_labels()
+        if handles and len(handles) > 1:
+            ax.legend(fontsize=7, framealpha=0.7)
+
+        plt.tight_layout(pad=1.0)
         tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
         tmp.close()
-        pio.write_image(fig, tmp.name, format='png', width=700, height=280, scale=1.5)
+        fig.savefig(tmp.name, dpi=150, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
         return tmp.name
     except Exception:
         return None

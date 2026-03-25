@@ -13,7 +13,7 @@ groq
 google-genai
 cerebras-cloud-sdk
 fpdf2
-kaleido==0.2.1
+matplotlib
 python-dotenv
 redis
 pdfplumber
