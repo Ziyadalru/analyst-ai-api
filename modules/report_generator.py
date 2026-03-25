@@ -85,34 +85,38 @@ def _chart_to_png(fig_dict: dict) -> str | None:
                     plotted = True
                     continue
 
-                if not y:
+                # Filter None values from y (NaN → null → None after numpy_safe round-trip)
+                y_clean = [float(v) for v in y if v is not None]
+                if not y_clean:
                     continue
 
-                x_pos = list(range(len(y))) if not x else None
+                x_clean = [v for v in x if v is not None]
+                x_pos = list(range(len(y_clean))) if not x_clean else None
 
-                if t in ('bar',):
-                    if x:
-                        ax.bar([str(v)[:15] for v in x], [float(v) for v in y], color=c, alpha=0.85, label=name)
-                    else:
-                        ax.bar(x_pos, [float(v) for v in y], color=c, alpha=0.85, label=name)
+                if t in ('bar', 'waterfall', 'funnel'):
+                    x_labels = [str(v)[:15] for v in x_clean] if x_clean else x_pos
+                    ax.bar(x_labels, y_clean, color=c, alpha=0.85, label=name)
                 elif t in ('scatter', 'line'):
-                    mode = trace.get('mode', 'lines')
-                    xs = [str(v) for v in x] if x else x_pos
-                    ys = [float(v) for v in y]
+                    mode = trace.get('mode', 'lines+markers' if t == 'line' else 'markers')
+                    # Keep x numeric when possible (scatter requires numeric x)
+                    try:
+                        xs = [float(v) for v in x_clean] if x_clean else x_pos
+                    except (TypeError, ValueError):
+                        xs = [str(v) for v in x_clean] if x_clean else x_pos
                     if 'lines' in mode:
-                        ax.plot(xs, ys, color=c, linewidth=2, label=name)
+                        ax.plot(xs, y_clean, color=c, linewidth=2, label=name)
                     if 'markers' in mode:
-                        ax.scatter(xs, ys, color=c, s=30, label=name)
+                        ax.scatter(xs, y_clean, color=c, s=30, label=name)
+                    if 'lines' not in mode and 'markers' not in mode:
+                        ax.plot(xs, y_clean, color=c, linewidth=2, label=name)
                 elif t == 'pie':
-                    vals = [float(v) for v in y]
-                    lbls = [str(v)[:12] for v in x] if x else [str(j) for j in range(len(vals))]
-                    ax.pie(vals, labels=lbls, colors=colors[:len(vals)], autopct='%1.0f%%')
+                    lbls = [str(v)[:12] for v in x_clean] if x_clean else [str(j) for j in range(len(y_clean))]
+                    ax.pie(y_clean, labels=lbls, colors=colors[:len(y_clean)], autopct='%1.0f%%')
                 elif t == 'box':
-                    ax.boxplot([float(v) for v in y if v is not None], patch_artist=True,
-                               boxprops=dict(facecolor=c, alpha=0.7))
+                    ax.boxplot(y_clean, patch_artist=True, boxprops=dict(facecolor=c, alpha=0.7))
                 else:
-                    ax.bar([str(v)[:15] for v in x] if x else x_pos,
-                           [float(v) for v in y], color=c, alpha=0.85, label=name)
+                    x_labels = [str(v)[:15] for v in x_clean] if x_clean else x_pos
+                    ax.bar(x_labels, y_clean, color=c, alpha=0.85, label=name)
                 plotted = True
             except Exception:
                 continue
