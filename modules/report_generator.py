@@ -55,14 +55,41 @@ def _chart_to_png(fig_dict: dict) -> str | None:
             t = trace.get('type', 'bar')
             x = trace.get('x') or trace.get('labels') or []
             y = trace.get('y') or trace.get('values') or []
+            z = trace.get('z')
             name = trace.get('name', '')
 
-            if not y:
-                continue
-
-            x_pos = list(range(len(y))) if not x else None
-
             try:
+                # Histogram — only has x, compute bins with numpy
+                if t == 'histogram':
+                    if not x:
+                        continue
+                    ax.hist([float(v) for v in x if v is not None], bins=30, color=c, alpha=0.8, label=name)
+                    plotted = True
+                    continue
+
+                # Heatmap — uses z matrix
+                if t == 'heatmap':
+                    if z is None:
+                        continue
+                    z_arr = np.array(z, dtype=float)
+                    im = ax.imshow(z_arr, aspect='auto', cmap='RdYlGn', vmin=-1, vmax=1)
+                    x_labels = trace.get('x') or []
+                    y_labels = trace.get('y') or []
+                    if x_labels:
+                        ax.set_xticks(range(len(x_labels)))
+                        ax.set_xticklabels([str(v)[:10] for v in x_labels], rotation=45, fontsize=6)
+                    if y_labels:
+                        ax.set_yticks(range(len(y_labels)))
+                        ax.set_yticklabels([str(v)[:10] for v in y_labels], fontsize=6)
+                    plt.colorbar(im, ax=ax, fraction=0.03)
+                    plotted = True
+                    continue
+
+                if not y:
+                    continue
+
+                x_pos = list(range(len(y))) if not x else None
+
                 if t in ('bar',):
                     if x:
                         ax.bar([str(v)[:15] for v in x], [float(v) for v in y], color=c, alpha=0.85, label=name)
@@ -80,6 +107,9 @@ def _chart_to_png(fig_dict: dict) -> str | None:
                     vals = [float(v) for v in y]
                     lbls = [str(v)[:12] for v in x] if x else [str(j) for j in range(len(vals))]
                     ax.pie(vals, labels=lbls, colors=colors[:len(vals)], autopct='%1.0f%%')
+                elif t == 'box':
+                    ax.boxplot([float(v) for v in y if v is not None], patch_artist=True,
+                               boxprops=dict(facecolor=c, alpha=0.7))
                 else:
                     ax.bar([str(v)[:15] for v in x] if x else x_pos,
                            [float(v) for v in y], color=c, alpha=0.85, label=name)
